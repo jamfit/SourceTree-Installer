@@ -21,9 +21,6 @@ log "The expected size of the downloaded file is $webfilesize"
 
 #Downloading the file to the temp directory
 /usr/bin/curl $downloadURL -o "$tempDir/outfile.zip"
-log "SourceTree download URL: $downloadURL"
-
-#log "Downloading SourceTree DMG"
 if [ $? -ne 0 ]; then
     log "curl error code $?: The SoureTree Zip did not successfully download"
     exit 1
