@@ -13,6 +13,7 @@ echo "$1"
 
 # Scrape the current download URL from the landing page for SourceTree downloads
 downloadURL=`/usr/bin/curl -s https://www.sourcetreeapp.com/ | /usr/bin/awk -F'"' '{print $120}'`
+log "SourceTree download URL: $downloadURL"
 
 # Check for the expected size of the downloaded Zipped File
 webfilesize=$(/usr/bin/curl $downloadURL -ILs | /usr/bin/tr -d '\r' | /usr/bin/awk '/Content-Length:/ {print $2}')
