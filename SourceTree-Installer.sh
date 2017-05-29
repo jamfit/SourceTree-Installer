@@ -1,18 +1,22 @@
 #!/bin/bash
-
-policy="SourceTree"
-loggertag="system-log-tag" # JAMF IT uses the tag "jamfsw-it-logs"
-tempDir="/Library/Application Support/JAMF/tmp"
-
 # This logging function writes messages to both the STDOUT
 # for the JSS log as well as into the local system.log
 log() {
-echo "$1"
-/usr/bin/logger -t "$loggertag: $policy" "$1"
+    echo "$1"
+    /usr/bin/logger -t "SourceTree Installer:" "$1"
 }
 
+tempDir=$(/usr/bin/mktemp -d -t "SourceTree_Installer")
+
+cleanUp() {
+    log "Performing cleanup tasks..."
+    /bin/rm -r "$tempDir"
+}
+
+trap cleanUp exit
+
 # Scrape the current download URL from the landing page for SourceTree downloads
-downloadURL=`/usr/bin/curl -s https://www.sourcetreeapp.com/ | /usr/bin/awk -F'"' '{print $120}'`
+downloadURL=$(/usr/bin/curl -s https://www.sourcetreeapp.com/ | /usr/bin/awk -F'"' '{print $120}')
 log "SourceTree download URL: $downloadURL"
 
 # Check for the expected size of the downloaded Zipped File
@@ -20,14 +24,14 @@ webfilesize=$(/usr/bin/curl $downloadURL -ILs | /usr/bin/tr -d '\r' | /usr/bin/a
 log "The expected size of the downloaded file is $webfilesize"
 
 #Downloading the file to the temp directory
-/usr/bin/curl $downloadURL -o "$tempDir/outfile.zip"
+/usr/bin/curl $downloadURL -o "$tempDir/sourcetree.zip"
 if [ $? -ne 0 ]; then
     log "curl error code $?: The SoureTree Zip did not successfully download"
     exit 1
 fi
 
 # Check the size of the downloaded Zip
-dlfilesize=$(/usr/bin/cksum "$tempDir/outfile.zip" | /usr/bin/awk '{print $2}')
+dlfilesize=$(/usr/bin/cksum "$tempDir/sourcetree.zip" | /usr/bin/awk '{print $2}')
 log "The size of the downloaded file is $dlfilesize"
 
 # Compare the expected size against the downloaded size
@@ -43,7 +47,7 @@ if [ -e /Applications/SourceTree.app ]; then
 fi
 
 #Unzipping SourceTree
-unzip "$tempDir/outfile.zip" -d "$tempDir"
+/usr/bin/unzip "$tempDir/sourcetree.zip" -d "$tempDir"
 
 #Copying SourceTree.app to Applications
 log "Copying SourceTree.app to Applications"
