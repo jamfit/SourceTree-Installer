@@ -1,34 +1,37 @@
 #!/bin/bash
-
-policy="SourceTree"
-loggertag="system-log-tag" # JAMF IT uses the tag "jamfsw-it-logs"
-tempDir="/Library/Application Support/JAMF/tmp"
-
 # This logging function writes messages to both the STDOUT
 # for the JSS log as well as into the local system.log
 log() {
-echo "$1"
-/usr/bin/logger -t "$loggertag: $policy" "$1"
+    echo "$1"
+    /usr/bin/logger -t "SourceTree Installer:" "$1"
 }
 
+tempDir=$(/usr/bin/mktemp -d -t "SourceTree_Installer")
+
+cleanUp() {
+    log "Performing cleanup tasks..."
+    /bin/rm -r "$tempDir"
+}
+
+trap cleanUp exit
+
 # Scrape the current download URL from the landing page for SourceTree downloads
-downloadURL=$(/usr/bin/curl -s http://sourcetreeapp.com/download/ | /usr/bin/grep '.dmg">direct link<\/a>' | /usr/bin/awk -F'"' '{print $2}')
+downloadURL=$(/usr/bin/curl -s https://www.sourcetreeapp.com/ | /usr/bin/awk -F'"' '{print $120}')
 log "SourceTree download URL: $downloadURL"
 
-# Check for the expected size of the downloaded DMG
+# Check for the expected size of the downloaded Zipped File
 webfilesize=$(/usr/bin/curl $downloadURL -ILs | /usr/bin/tr -d '\r' | /usr/bin/awk '/Content-Length:/ {print $2}')
 log "The expected size of the downloaded file is $webfilesize"
 
-# Download the DMG to the JAMF temp directory
-log "Downloading SourceTree DMG"
-/usr/bin/curl -s $downloadURL -o "$tempDir/sourcetree.dmg"
+#Downloading the file to the temp directory
+/usr/bin/curl $downloadURL -o "$tempDir/sourcetree.zip"
 if [ $? -ne 0 ]; then
-    log "curl error code $?: The SoureTree DMG did not successfully download"
+    log "curl error code $?: The SoureTree Zip did not successfully download"
     exit 1
 fi
 
-# Check the size of the downloaded DMG
-dlfilesize=$(/usr/bin/cksum "$tempDir/sourcetree.dmg" | /usr/bin/awk '{print $2}')
+# Check the size of the downloaded Zip
+dlfilesize=$(/usr/bin/cksum "$tempDir/sourcetree.zip" | /usr/bin/awk '{print $2}')
 log "The size of the downloaded file is $dlfilesize"
 
 # Compare the expected size against the downloaded size
@@ -37,27 +40,22 @@ if [[ $webfilesize -ne $dlfilesize ]]; then
     exit 1
 fi
 
-log "Mounting the SourceTree DMG"
-/usr/bin/hdiutil attach "${tempDir}/sourcetree.dmg" -mountpoint "${tempDir}/sourcetree" -nobrowse -noverify
-if [ $? -ne 0 ]; then
-    log "hdiutil error code $?: The DMG did not successfully mount"
-    exit 1
-fi
-
+#If SourceTree is already installed, uninstall it
 if [ -e /Applications/SourceTree.app ]; then
     /bin/rm -rf /Applications/SourceTree.app
     log "Deleted an existing copy of SourceTree.app"
 fi
 
+#Unzipping SourceTree
+/usr/bin/unzip "$tempDir/sourcetree.zip" -d "$tempDir"
+
+#Copying SourceTree.app to Applications
 log "Copying SourceTree.app to Applications"
-/bin/cp -a "$tempDir/sourcetree/SourceTree.app" /Applications/
+/bin/cp -a "$tempDir/SourceTree.app" /Applications/
 if [ $? -ne 0 ]; then
     log "cp error code $?: SourceTree.app did not successfully copy"
     exit 1
 fi
-
-log "Unmounting the SourceTree DMG"
-/usr/bin/hdiutil detach "$tempDir/sourcetree" -force
 
 # The SourceTree license
 # Replace the values for the 'Name', 'Email' and 'Signature' keys with your own!
@@ -100,6 +98,6 @@ log "Opening SourceTree.app"
 
 # Run a recon to update the JSS inventory
 log "Running Recon."
-/usr/sbin/jamf recon || log "jamf error code $?: There was an error running Recon"
+/usr/local/bin/jamf recon || log "jamf error code $?: There was an error running Recon"
 
 exit 0
